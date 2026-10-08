@@ -10,9 +10,9 @@
   <div class="chat-app">
     <header class="chat-header">
       <div class="user-info">
-        <div class="avatar">JD</div>
+        <div class="avatar" id="user-avatar">--</div>
         <div>
-          <h3 class="user-name">adi</h3>
+          <h3 class="user-name" id="user-display-name">Chat</h3>
           <span class="user-status">online</span>
         </div>
       </div>
@@ -21,14 +21,7 @@
 
     <!-- Chat Messages Body -->
     <main class="chat-messages" id="chat-messages">
-
-      <!-- Incoming Message Example -->
-      <div class="message incoming">
-      </div>
-
-      <!-- Outgoing Message Example -->
-      <div class="message outgoing">
-      </div>
+      <div class="date-divider"><span>Today</span></div>
     </main>
 
     <!-- Bottom Message Input Box -->
@@ -55,15 +48,32 @@
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
     const logoutBtn = document.getElementById('logout-btn');
+    const userDisplayName = document.getElementById('user-display-name');
+    const userAvatar = document.getElementById('user-avatar');
 
-    // 1. Format timestamp 
-    function formatTime(date = new Date()) {
+    // 1. Auth Guard
+    const token = localStorage.getItem('token');
+    const currentUser = JSON.parse(localStorage.getItem('user'));
+
+    if (!token || !currentUser) {
+      window.location.href = 'login.html';
+    } else {
+      userDisplayName.textContent = currentUser.name;
+      userAvatar.textContent = (currentUser.name || 'U').slice(0, 2).toUpperCase();
+    }
+
+    // Target chat partner ID (for testing 1-on-1: if user 1, chat with 2, else chat with 1)
+    const receiverId = currentUser && currentUser.id === 1 ? 2 : 1;
+
+    // 2. Format Timestamp
+    function formatTime(isoString) {
+      const date = isoString ? new Date(isoString) : new Date();
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    // 2. Scroll Logic
+    // 3. Scroll Behavior
     function isNearBottom() {
-      const threshold = 80; // px from bottom
+      const threshold = 100;
       return messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight <= threshold;
     }
 
@@ -74,14 +84,8 @@
       });
     }
 
-    // Auto-scroll on initial page open
-    window.addEventListener('load', () => {
-      scrollToBottom(false);
-      messageInput.focus();
-    });
-
-    // 3. Render Message to UI
-    function appendMessage(text, isOutgoing = true) {
+    // 4. Render message bubble
+    function appendMessage(text, isOutgoing = true, timestamp) {
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`;
 
@@ -90,7 +94,7 @@
       
       const timeSpan = document.createElement('span');
       timeSpan.className = 'message-time';
-      timeSpan.innerHTML = `${formatTime()} ${isOutgoing ? '<span class="check-marks">✓✓</span>' : ''}`;
+      timeSpan.innerHTML = `${formatTime(timestamp)} ${isOutgoing ? '<span class="check-marks">✓✓</span>' : ''}`;
 
       contentDiv.textContent = text;
       contentDiv.appendChild(timeSpan);
@@ -104,15 +108,80 @@
       }
     }
 
-    // 4. Handle Send
-    chatForm.addEventListener('submit', (e) => {
+    // 5. Fetch Chat History from Backend
+    let previousCount = 0;
+    async function loadMessages() {
+      try {
+        const response = await fetch(`http://localhost:5000/api/v1/messages/${receiverId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) return;
+
+        const result = await response.json();
+        const messages = result.data || [];
+
+        // Only re-render if message count changed
+        if (messages.length !== previousCount) {
+          previousCount = messages.length;
+          messagesContainer.innerHTML = '<div class="date-divider"><span>Today</span></div>';
+
+          messages.forEach((msg) => {
+            const isOutgoing = msg.senderId === currentUser.id;
+            appendMessage(msg.message, isOutgoing, msg.createdAt);
+          });
+
+          scrollToBottom(false);
+        }
+      } catch (err) {
+        console.error('Failed to load messages:', err);
+      }
+    }
+
+    // Initial load
+    loadMessages();
+    messageInput.focus();
+
+    // Auto-poll every 3 seconds for new messages
+    setInterval(loadMessages, 3000);
+
+    // 6. Handle Send Message
+    chatForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = messageInput.value.trim();
       if (!text) return;
 
-      appendMessage(text, true);
       messageInput.value = '';
-      messageInput.focus();
+
+      try {
+        const response = await fetch('http://localhost:5000/api/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            receiverId: receiverId,
+            message: text
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          alert(result.error || 'Failed to send message');
+          return;
+        }
+
+        appendMessage(result.data.message, true, result.data.createdAt);
+        previousCount++;
+        scrollToBottom(true);
+      } catch (err) {
+        console.error(err);
+        alert('Could not connect to the server.');
+      }
     });
 
     // Logout
