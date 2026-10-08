@@ -1,0 +1,233 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #e5ddd5;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Chat App Wrapper */
+.chat-app {
+  width: 100%;
+  max-width: 900px;
+  height: 95vh;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 1. Header */
+.chat-header {
+  height: 60px;
+  background-color: #f0f2f5;
+  border-bottom: 1px solid #d1d7db;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #00a884;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.user-name {
+  font-size: 15px;
+  color: #111b21;
+}
+
+.user-status {
+  font-size: 12px;
+  color: #00a884;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid #d1d7db;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #54656f;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.logout-btn:hover {
+  background: #ffffff;
+  color: #111b21;
+}
+
+/* 2. Messages Container (Scroll behavior) */
+.chat-messages {
+  flex: 1;
+  background-color: #efeae2;
+  background-image: radial-gradient(#d1d7db 0.75px, transparent 0.75px);
+  background-size: 16px 16px;
+  overflow-y: auto;
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scroll-behavior: smooth;
+}
+
+/* Custom Clean Scrollbar */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Date Pill */
+.date-divider {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+.date-divider span {
+  background: #ffffff;
+  color: #54656f;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* 3. Message Bubbles & Timestamps */
+.message {
+  display: flex;
+  max-width: 65%;
+  margin-bottom: 2px;
+}
+
+.message.incoming {
+  align-self: flex-start;
+}
+
+.message.outgoing {
+  align-self: flex-end;
+}
+
+.message-content {
+  position: relative;
+  padding: 6px 10px 8px 10px;
+  border-radius: 7.5px;
+  font-size: 14.2px;
+  line-height: 19px;
+  color: #111b21;
+  word-break: break-word;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+}
+
+.incoming .message-content {
+  background-color: #ffffff;
+  border-top-left-radius: 0;
+}
+
+.outgoing .message-content {
+  background-color: #d9fdd3;
+  border-top-right-radius: 0;
+}
+
+/* Timestamp inside bubble */
+.message-time {
+  float: right;
+  margin-left: 14px;
+  margin-top: 5px;
+  font-size: 11px;
+  color: #667781;
+  white-space: nowrap;
+}
+
+.check-marks {
+  color: #53bdeb;
+  font-size: 11px;
+  margin-left: 3px;
+}
+
+/* 4. Bottom Input Box */
+.chat-input-area {
+  min-height: 62px;
+  background-color: #f0f2f5;
+  border-top: 1px solid #d1d7db;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.chat-form {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+}
+
+.chat-form input {
+  flex: 1;
+  height: 42px;
+  background-color: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 8px;
+  padding: 0 16px;
+  font-size: 15px;
+  color: #111b21;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.chat-form input:focus {
+  border-color: #00a884;
+}
+
+.send-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background-color: #00a884;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+
+.send-btn:hover {
+  background-color: #008f6f;
+}

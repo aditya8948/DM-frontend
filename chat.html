@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat - DM</title>
+  <link rel="stylesheet" href="chat.css" />
+</head>
+<body>
+  <div class="chat-app">
+    <header class="chat-header">
+      <div class="user-info">
+        <div class="avatar">JD</div>
+        <div>
+          <h3 class="user-name">adi</h3>
+          <span class="user-status">online</span>
+        </div>
+      </div>
+      <button class="logout-btn" id="logout-btn">Log out</button>
+    </header>
+
+    <!-- Chat Messages Body -->
+    <main class="chat-messages" id="chat-messages">
+
+      <!-- Incoming Message Example -->
+      <div class="message incoming">
+      </div>
+
+      <!-- Outgoing Message Example -->
+      <div class="message outgoing">
+      </div>
+    </main>
+
+    <!-- Bottom Message Input Box -->
+    <footer class="chat-input-area">
+      <form id="chat-form" class="chat-form">
+        <input 
+          type="text" 
+          id="message-input" 
+          placeholder="Type a message..." 
+          autocomplete="off" 
+          required 
+        />
+        <button type="submit" id="send-btn" class="send-btn" title="Send message">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </form>
+    </footer>
+  </div>
+
+  <script>
+    const messagesContainer = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    // 1. Format timestamp 
+    function formatTime(date = new Date()) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // 2. Scroll Logic
+    function isNearBottom() {
+      const threshold = 80; // px from bottom
+      return messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight <= threshold;
+    }
+
+    function scrollToBottom(smooth = false) {
+      messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+    }
+
+    // Auto-scroll on initial page open
+    window.addEventListener('load', () => {
+      scrollToBottom(false);
+      messageInput.focus();
+    });
+
+    // 3. Render Message to UI
+    function appendMessage(text, isOutgoing = true) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`;
+
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'message-content';
+      
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'message-time';
+      timeSpan.innerHTML = `${formatTime()} ${isOutgoing ? '<span class="check-marks">✓✓</span>' : ''}`;
+
+      contentDiv.textContent = text;
+      contentDiv.appendChild(timeSpan);
+      messageDiv.appendChild(contentDiv);
+
+      const shouldScroll = isOutgoing || isNearBottom();
+      messagesContainer.appendChild(messageDiv);
+
+      if (shouldScroll) {
+        scrollToBottom(true);
+      }
+    }
+
+    // 4. Handle Send
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = messageInput.value.trim();
+      if (!text) return;
+
+      appendMessage(text, true);
+      messageInput.value = '';
+      messageInput.focus();
+    });
+
+    // Logout
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'login.html';
+    });
+  </script>
+</body>
+</html>

@@ -31,5 +31,45 @@
       </p>
     </div>
   </div>
+    <script>
+    const form = document.getElementById('login-form');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const payload = {
+        identifier: document.getElementById('identifier').value,
+        password: document.getElementById('password').value
+      };
+
+      try {
+        const response = await fetch('http://localhost:5000/api/v1/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.error || 'Login failed');
+          return;
+        }
+
+        // Store auth token and user details in localStorage
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        alert('Login successful! Welcome, ' + data.user.name);
+        // Next: redirect to chat dashboard (e.g. chat.html)
+      } catch (err) {
+        console.error(err);
+        alert('Could not connect to the server.');
+      }
+    });
+  </script>
+</body>
+</html>
+
 </body>
 </html>
