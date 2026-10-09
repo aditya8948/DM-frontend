@@ -19,12 +19,10 @@
       <button class="logout-btn" id="logout-btn">Log out</button>
     </header>
 
-    <!-- Chat Messages Body -->
     <main class="chat-messages" id="chat-messages">
       <div class="date-divider"><span>Today</span></div>
     </main>
 
-    <!-- Bottom Message Input Box -->
     <footer class="chat-input-area">
       <form id="chat-form" class="chat-form">
         <input 
@@ -43,7 +41,6 @@
     </footer>
   </div>
 
-  <!-- Socket.IO Client -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
   <script>
@@ -54,7 +51,6 @@
     const userDisplayName = document.getElementById('user-display-name');
     const userAvatar = document.getElementById('user-avatar');
 
-    // 1. Auth Guard
     const token = localStorage.getItem('token');
     const currentUser = JSON.parse(localStorage.getItem('user'));
 
@@ -65,25 +61,20 @@
       userAvatar.textContent = (currentUser.name || 'U').slice(0, 2).toUpperCase();
     }
 
-    // Target chat partner ID (for testing 1-on-1: if user 1, chat with 2, else chat with 1)
     const receiverId = currentUser && currentUser.id === 1 ? 2 : 1;
 
-    // 2. Initialize Real-Time Socket.IO Connection
     const socket = io('http://localhost:5000');
 
     socket.on('connect', () => {
       console.log('Connected to real-time chat via Socket.IO');
-      // Join user's personal private room
       socket.emit('join', currentUser.id);
     });
 
-    // 3. Format Timestamp
     function formatTime(isoString) {
       const date = isoString ? new Date(isoString) : new Date();
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    // 4. Scroll Behavior
     function isNearBottom() {
       const threshold = 100;
       return messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight <= threshold;
@@ -96,11 +87,10 @@
       });
     }
 
-    // 5. Render message bubble
     const renderedMessageIds = new Set();
     function appendMessage(text, isOutgoing = true, timestamp, messageId = null) {
       if (messageId && renderedMessageIds.has(messageId)) {
-        return; // Prevent duplicate rendering
+        return;
       }
       if (messageId) {
         renderedMessageIds.add(messageId);
@@ -128,7 +118,6 @@
       }
     }
 
-    // 6. Load Initial History from Database
     async function loadHistory() {
       try {
         const response = await fetch(`http://localhost:5000/api/v1/messages/${receiverId}`, {
@@ -156,11 +145,9 @@
       }
     }
 
-    // Load past messages on start
     loadHistory();
     messageInput.focus();
 
-    // 7. Receive Real-Time Messages over Socket.IO
     socket.on('receive_message', (msg) => {
       const isFromPartner = msg.senderId === receiverId && msg.receiverId === currentUser.id;
       const isFromMe = msg.senderId === currentUser.id && msg.receiverId === receiverId;
@@ -170,7 +157,6 @@
       }
     });
 
-    // 8. Send Real-Time Message over Socket.IO
     chatForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = messageInput.value.trim();
@@ -178,7 +164,6 @@
 
       messageInput.value = '';
 
-      // Emit real-time event to server (which saves to MySQL and broadcasts)
       socket.emit('send_message', {
         senderId: currentUser.id,
         receiverId: receiverId,
@@ -190,7 +175,6 @@
       });
     });
 
-    // Logout
     logoutBtn.addEventListener('click', () => {
       socket.disconnect();
       localStorage.removeItem('token');
