@@ -43,6 +43,9 @@
     </footer>
   </div>
 
+  <!-- Socket.IO Client -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
   <script>
     const messagesContainer = document.getElementById('chat-messages');
     const chatForm = document.getElementById('chat-form');
@@ -65,13 +68,22 @@
     // Target chat partner ID (for testing 1-on-1: if user 1, chat with 2, else chat with 1)
     const receiverId = currentUser && currentUser.id === 1 ? 2 : 1;
 
-    // 2. Format Timestamp
+    // 2. Initialize Real-Time Socket.IO Connection
+    const socket = io('http://localhost:5000');
+
+    socket.on('connect', () => {
+      console.log('Connected to real-time chat via Socket.IO');
+      // Join user's personal private room
+      socket.emit('join', currentUser.id);
+    });
+
+    // 3. Format Timestamp
     function formatTime(isoString) {
       const date = isoString ? new Date(isoString) : new Date();
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    // 3. Scroll Behavior
+    // 4. Scroll Behavior
     function isNearBottom() {
       const threshold = 100;
       return messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight <= threshold;
@@ -84,8 +96,16 @@
       });
     }
 
-    // 4. Render message bubble
-    function appendMessage(text, isOutgoing = true, timestamp) {
+    // 5. Render message bubble
+    const renderedMessageIds = new Set();
+    function appendMessage(text, isOutgoing = true, timestamp, messageId = null) {
+      if (messageId && renderedMessageIds.has(messageId)) {
+        return; // Prevent duplicate rendering
+      }
+      if (messageId) {
+        renderedMessageIds.add(messageId);
+      }
+
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`;
 
@@ -108,9 +128,8 @@
       }
     }
 
-    // 5. Fetch Chat History from Backend
-    let previousCount = 0;
-    async function loadMessages() {
+    // 6. Load Initial History from Database
+    async function loadHistory() {
       try {
         const response = await fetch(`http://localhost:5000/api/v1/messages/${receiverId}`, {
           headers: {
@@ -123,69 +142,57 @@
         const result = await response.json();
         const messages = result.data || [];
 
-        // Only re-render if message count changed
-        if (messages.length !== previousCount) {
-          previousCount = messages.length;
-          messagesContainer.innerHTML = '<div class="date-divider"><span>Today</span></div>';
+        messagesContainer.innerHTML = '<div class="date-divider"><span>Today</span></div>';
+        renderedMessageIds.clear();
 
-          messages.forEach((msg) => {
-            const isOutgoing = msg.senderId === currentUser.id;
-            appendMessage(msg.message, isOutgoing, msg.createdAt);
-          });
+        messages.forEach((msg) => {
+          const isOutgoing = msg.senderId === currentUser.id;
+          appendMessage(msg.message, isOutgoing, msg.createdAt, msg.id);
+        });
 
-          scrollToBottom(false);
-        }
+        scrollToBottom(false);
       } catch (err) {
-        console.error('Failed to load messages:', err);
+        console.error('Failed to load history:', err);
       }
     }
 
-    // Initial load
-    loadMessages();
+    // Load past messages on start
+    loadHistory();
     messageInput.focus();
 
-    // Auto-poll every 3 seconds for new messages
-    setInterval(loadMessages, 3000);
+    // 7. Receive Real-Time Messages over Socket.IO
+    socket.on('receive_message', (msg) => {
+      const isFromPartner = msg.senderId === receiverId && msg.receiverId === currentUser.id;
+      const isFromMe = msg.senderId === currentUser.id && msg.receiverId === receiverId;
 
-    // 6. Handle Send Message
-    chatForm.addEventListener('submit', async (e) => {
+      if (isFromPartner || isFromMe) {
+        appendMessage(msg.message, msg.senderId === currentUser.id, msg.createdAt, msg.id);
+      }
+    });
+
+    // 8. Send Real-Time Message over Socket.IO
+    chatForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = messageInput.value.trim();
       if (!text) return;
 
       messageInput.value = '';
 
-      try {
-        const response = await fetch('http://localhost:5000/api/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            receiverId: receiverId,
-            message: text
-          })
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          alert(result.error || 'Failed to send message');
-          return;
+      // Emit real-time event to server (which saves to MySQL and broadcasts)
+      socket.emit('send_message', {
+        senderId: currentUser.id,
+        receiverId: receiverId,
+        message: text
+      }, (ack) => {
+        if (ack && ack.error) {
+          alert(ack.error);
         }
-
-        appendMessage(result.data.message, true, result.data.createdAt);
-        previousCount++;
-        scrollToBottom(true);
-      } catch (err) {
-        console.error(err);
-        alert('Could not connect to the server.');
-      }
+      });
     });
 
     // Logout
     logoutBtn.addEventListener('click', () => {
+      socket.disconnect();
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = 'login.html';
