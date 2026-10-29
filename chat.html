@@ -3,110 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chat - DM</title>
+  <title>Chat service </title>
   <link rel="stylesheet" href="chat.css" />
 </head>
 <body>
-  <div class="chat-app">
-    <header class="chat-header">
-      <div class="user-info">
-        <div class="avatar" id="user-avatar">--</div>
-        <div>
-          <h3 class="user-name" id="user-display-name">Chat</h3>
-          <span class="user-status" id="room-status">No room joined</span>
+  <header class="app-header">
+    <div class="header-title">Chat service</div>
+    <div class="header-right">
+      <div class="header-user-badge">
+        <div class="header-user-avatar" id="current-user-avatar">--</div>
+        <span id="current-user-name">User</span>
+      </div>
+      <button type="button" class="header-logout-btn" id="logout-btn">Log out</button>
+    </div>
+  </header>
+
+  <div class="chat-container">
+    <aside class="sidebar">
+      <div class="search-box">
+        <input type="text" id="user-search" placeholder="Search email..." autocomplete="off" />
+      </div>
+      <div class="sidebar-divider"></div>
+      <div class="users-list" id="users-list"></div>
+    </aside>
+
+    <main class="chat-panel">
+      <div class="chat-card">
+        <div class="chat-card-header">
+          <span id="chat-partner-label">Select a user from the list to start chatting</span>
+          <span id="room-badge" style="font-size: 12px; color: #1e88e5; font-weight: 500;"></span>
         </div>
-      </div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <input type="email" id="partner-email" placeholder="Enter user email..." style="padding: 6px 10px; border-radius: 6px; border: 1px solid #d0d7de; font-size: 13px; outline: none;" />
-        <button type="button" id="join-room-btn" class="logout-btn" style="background: #2563eb; color: #fff; border: none; font-weight: 500;">Join</button>
-      </div>
-      <button class="logout-btn" id="logout-btn">Log out</button>
-    </header>
 
-    <main class="chat-messages" id="chat-messages">
-      <div class="date-divider"><span>Today</span></div>
+        <div class="chat-messages" id="chat-messages"></div>
+
+        <form class="chat-input-bar" id="chat-form">
+          <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required />
+          <button type="submit" id="send-btn">Send</button>
+        </form>
+      </div>
     </main>
-
-    <footer class="chat-input-area">
-      <form id="chat-form" class="chat-form">
-        <input 
-          type="text" 
-          id="message-input" 
-          placeholder="Type a message..." 
-          autocomplete="off" 
-          required 
-        />
-        <button type="submit" id="send-btn" class="send-btn" title="Send message">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-          </svg>
-        </button>
-      </form>
-    </footer>
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
   <script>
-    const messagesContainer = document.getElementById('chat-messages');
-    const chatForm = document.getElementById('chat-form');
-    const messageInput = document.getElementById('message-input');
-    const logoutBtn = document.getElementById('logout-btn');
-    const userDisplayName = document.getElementById('user-display-name');
-    const userAvatar = document.getElementById('user-avatar');
-
     const token = localStorage.getItem('token');
     const currentUser = JSON.parse(localStorage.getItem('user'));
 
     if (!token || !currentUser) {
       window.location.href = 'login.html';
-    } else {
-      userDisplayName.textContent = currentUser.name;
-      userAvatar.textContent = (currentUser.name || 'U').slice(0, 2).toUpperCase();
     }
 
+    const currentUserNameEl = document.getElementById('current-user-name');
+    const currentUserAvatarEl = document.getElementById('current-user-avatar');
+    const userSearchInput = document.getElementById('user-search');
+    const usersList = document.getElementById('users-list');
+    const chatPartnerLabel = document.getElementById('chat-partner-label');
+    const roomBadge = document.getElementById('room-badge');
+    const messagesContainer = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    if (currentUser) {
+      currentUserNameEl.textContent = currentUser.name || currentUser.email;
+      currentUserAvatarEl.textContent = (currentUser.name || currentUser.email || 'U').slice(0, 2).toUpperCase();
+    }
+
+    let allUsers = [];
+    let selectedPartner = null;
     let currentRoomId = null;
-    let targetUserEmail = null;
-    const partnerEmailInput = document.getElementById('partner-email');
-    const joinRoomBtn = document.getElementById('join-room-btn');
-    const roomStatus = document.getElementById('room-status');
+    const renderedMessageIds = new Set();
 
     const socket = io('http://localhost:5000');
 
-    function joinConversationRoom(partnerEmail) {
-      if (!partnerEmail || !partnerEmail.trim()) {
-        alert('Please enter a user email');
-        return;
-      }
-      const trimmed = partnerEmail.trim().toLowerCase();
-      if (trimmed === currentUser.email.toLowerCase()) {
-        alert('Enter another user email to chat with');
-        return;
-      }
-      targetUserEmail = trimmed;
-      const emails = [currentUser.email.toLowerCase(), targetUserEmail].sort();
-      currentRoomId = `room_${emails[0]}_${emails[1]}`;
-
-      socket.emit('join_room', currentRoomId);
-      roomStatus.textContent = `Room: ${targetUserEmail}`;
-      messagesContainer.innerHTML = '<div class="date-divider"><span>Today</span></div>';
-      renderedMessageIds.clear();
-      messageInput.focus();
-    }
-
-    joinRoomBtn.addEventListener('click', () => {
-      joinConversationRoom(partnerEmailInput.value);
-    });
-
-    partnerEmailInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        joinConversationRoom(partnerEmailInput.value);
-      }
-    });
-
     socket.on('connect', () => {
-      console.log('Connected to real-time chat via Socket.IO');
       if (currentRoomId) {
         socket.emit('join_room', currentRoomId);
       }
@@ -118,7 +89,7 @@
     }
 
     function isNearBottom() {
-      const threshold = 100;
+      const threshold = 120;
       return messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight <= threshold;
     }
 
@@ -129,8 +100,7 @@
       });
     }
 
-    const renderedMessageIds = new Set();
-    function appendMessage(text, isOutgoing = true, timestamp, messageId = null) {
+    function appendMessage(text, isOutgoing, timestamp, messageId, senderName) {
       if (messageId && renderedMessageIds.has(messageId)) {
         return;
       }
@@ -141,16 +111,16 @@
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`;
 
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'message-content';
-      
-      const timeSpan = document.createElement('span');
-      timeSpan.className = 'message-time';
-      timeSpan.innerHTML = `${formatTime(timestamp)} ${isOutgoing ? '<span class="check-marks">✓✓</span>' : ''}`;
+      const bubbleDiv = document.createElement('div');
+      bubbleDiv.className = 'message-bubble';
+      bubbleDiv.textContent = `${isOutgoing ? 'You' : (senderName || 'Partner')} : ${text}`;
 
-      contentDiv.textContent = text;
-      contentDiv.appendChild(timeSpan);
-      messageDiv.appendChild(contentDiv);
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'message-time';
+      timeDiv.textContent = formatTime(timestamp);
+
+      messageDiv.appendChild(bubbleDiv);
+      messageDiv.appendChild(timeDiv);
 
       const shouldScroll = isOutgoing || isNearBottom();
       messagesContainer.appendChild(messageDiv);
@@ -160,8 +130,119 @@
       }
     }
 
+
+    function selectUser(partner) {
+      selectedPartner = partner;
+      userSearchInput.value = partner.email;
+
+      const emails = [currentUser.email.toLowerCase(), partner.email.toLowerCase()].sort();
+      currentRoomId = `room_${emails[0]}_${emails[1]}`;
+
+      socket.emit('join_room', currentRoomId);
+
+      chatPartnerLabel.textContent = `${partner.name} (${partner.email})`;
+      roomBadge.textContent = currentRoomId;
+
+      messagesContainer.innerHTML = '';
+      renderedMessageIds.clear();
+
+      renderUserList(getFilteredUsers());
+
+      messageInput.focus();
+    }
+
+    function renderUserList(users) {
+      usersList.innerHTML = '';
+      if (!users || users.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.color = 'rgba(255, 255, 255, 0.75)';
+        empty.style.fontSize = '13px';
+        empty.style.padding = '8px 4px';
+        empty.textContent = 'No matching users found';
+        usersList.appendChild(empty);
+        return;
+      }
+
+      users.forEach(user => {
+        const item = document.createElement('div');
+        item.className = 'user-item' + (selectedPartner && selectedPartner.email.toLowerCase() === user.email.toLowerCase() ? ' active' : '');
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'user-item-name';
+        nameSpan.textContent = user.name;
+
+        const emailSpan = document.createElement('span');
+        emailSpan.className = 'user-item-email';
+        emailSpan.textContent = user.email;
+
+        item.appendChild(nameSpan);
+        item.appendChild(emailSpan);
+
+        item.addEventListener('click', () => {
+          selectUser(user);
+        });
+
+        usersList.appendChild(item);
+      });
+    }
+
+    function getFilteredUsers() {
+      const q = userSearchInput.value.trim().toLowerCase();
+      if (!q) {
+        return allUsers;
+      }
+      return allUsers.filter(u => 
+        u.email.toLowerCase().includes(q) || 
+        (u.name && u.name.toLowerCase().includes(q))
+      );
+    }
+
+    userSearchInput.addEventListener('input', () => {
+      renderUserList(getFilteredUsers());
+    });
+
+    userSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const query = userSearchInput.value.trim().toLowerCase();
+        if (!query) return;
+
+        const matched = allUsers.find(u => 
+          u.email.toLowerCase() === query || 
+          (u.name && u.name.toLowerCase() === query)
+        );
+
+        if (matched) {
+          selectUser(matched);
+        } else {
+          selectUser({ id: null, name: query, email: query });
+        }
+      }
+    });
+
+    async function fetchUsers() {
+      try {
+        const res = await fetch('http://localhost:5000/api/v1/users', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await res.json();
+        if (data && data.users) {
+          allUsers = data.users;
+          renderUserList(allUsers);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    fetchUsers();
+
     socket.on('new_message', (msg) => {
-      appendMessage(msg.message, msg.senderId === currentUser.id, msg.createdAt, msg.id);
+      const isOutgoing = msg.senderId === currentUser.id;
+      const senderName = isOutgoing ? currentUser.name : (msg.senderName || (selectedPartner ? selectedPartner.name : 'Partner'));
+      appendMessage(msg.message, isOutgoing, msg.createdAt, msg.id, senderName);
     });
 
     chatForm.addEventListener('submit', (e) => {
@@ -170,8 +251,8 @@
       if (!text) return;
 
       if (!currentRoomId) {
-        alert('Please enter a user email and click Join first!');
-        partnerEmailInput.focus();
+        alert('Please select a user to chat with first!');
+        userSearchInput.focus();
         return;
       }
 
@@ -180,6 +261,8 @@
       socket.emit('send_message', {
         roomId: currentRoomId,
         senderId: currentUser.id,
+        receiverId: selectedPartner ? selectedPartner.id : null,
+        senderName: currentUser.name,
         message: text
       }, (ack) => {
         if (ack && ack.error) {
