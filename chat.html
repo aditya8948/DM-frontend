@@ -13,8 +13,12 @@
         <div class="avatar" id="user-avatar">--</div>
         <div>
           <h3 class="user-name" id="user-display-name">Chat</h3>
-          <span class="user-status">online</span>
+          <span class="user-status" id="room-status">No room joined</span>
         </div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <input type="email" id="partner-email" placeholder="Enter user email..." style="padding: 6px 10px; border-radius: 6px; border: 1px solid #d0d7de; font-size: 13px; outline: none;" />
+        <button type="button" id="join-room-btn" class="logout-btn" style="background: #2563eb; color: #fff; border: none; font-weight: 500;">Join</button>
       </div>
       <button class="logout-btn" id="logout-btn">Log out</button>
     </header>
@@ -61,13 +65,51 @@
       userAvatar.textContent = (currentUser.name || 'U').slice(0, 2).toUpperCase();
     }
 
-    const receiverId = currentUser && currentUser.id === 1 ? 2 : 1;
+    let currentRoomId = null;
+    let targetUserEmail = null;
+    const partnerEmailInput = document.getElementById('partner-email');
+    const joinRoomBtn = document.getElementById('join-room-btn');
+    const roomStatus = document.getElementById('room-status');
 
     const socket = io('http://localhost:5000');
 
+    function joinConversationRoom(partnerEmail) {
+      if (!partnerEmail || !partnerEmail.trim()) {
+        alert('Please enter a user email');
+        return;
+      }
+      const trimmed = partnerEmail.trim().toLowerCase();
+      if (trimmed === currentUser.email.toLowerCase()) {
+        alert('Enter another user email to chat with');
+        return;
+      }
+      targetUserEmail = trimmed;
+      const emails = [currentUser.email.toLowerCase(), targetUserEmail].sort();
+      currentRoomId = `room_${emails[0]}_${emails[1]}`;
+
+      socket.emit('join_room', currentRoomId);
+      roomStatus.textContent = `Room: ${targetUserEmail}`;
+      messagesContainer.innerHTML = '<div class="date-divider"><span>Today</span></div>';
+      renderedMessageIds.clear();
+      messageInput.focus();
+    }
+
+    joinRoomBtn.addEventListener('click', () => {
+      joinConversationRoom(partnerEmailInput.value);
+    });
+
+    partnerEmailInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        joinConversationRoom(partnerEmailInput.value);
+      }
+    });
+
     socket.on('connect', () => {
       console.log('Connected to real-time chat via Socket.IO');
-      socket.emit('join', currentUser.id);
+      if (currentRoomId) {
+        socket.emit('join_room', currentRoomId);
+      }
     });
 
     function formatTime(isoString) {
@@ -118,43 +160,8 @@
       }
     }
 
-    async function loadHistory() {
-      try {
-        const response = await fetch(`http://localhost:5000/api/v1/messages/${receiverId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (!response.ok) return;
-
-        const result = await response.json();
-        const messages = result.data || [];
-
-        messagesContainer.innerHTML = '<div class="date-divider"><span>Today</span></div>';
-        renderedMessageIds.clear();
-
-        messages.forEach((msg) => {
-          const isOutgoing = msg.senderId === currentUser.id;
-          appendMessage(msg.message, isOutgoing, msg.createdAt, msg.id);
-        });
-
-        scrollToBottom(false);
-      } catch (err) {
-        console.error('Failed to load history:', err);
-      }
-    }
-
-    loadHistory();
-    messageInput.focus();
-
-    socket.on('receive_message', (msg) => {
-      const isFromPartner = msg.senderId === receiverId && msg.receiverId === currentUser.id;
-      const isFromMe = msg.senderId === currentUser.id && msg.receiverId === receiverId;
-
-      if (isFromPartner || isFromMe) {
-        appendMessage(msg.message, msg.senderId === currentUser.id, msg.createdAt, msg.id);
-      }
+    socket.on('new_message', (msg) => {
+      appendMessage(msg.message, msg.senderId === currentUser.id, msg.createdAt, msg.id);
     });
 
     chatForm.addEventListener('submit', (e) => {
@@ -162,11 +169,17 @@
       const text = messageInput.value.trim();
       if (!text) return;
 
+      if (!currentRoomId) {
+        alert('Please enter a user email and click Join first!');
+        partnerEmailInput.focus();
+        return;
+      }
+
       messageInput.value = '';
 
       socket.emit('send_message', {
+        roomId: currentRoomId,
         senderId: currentUser.id,
-        receiverId: receiverId,
         message: text
       }, (ack) => {
         if (ack && ack.error) {
