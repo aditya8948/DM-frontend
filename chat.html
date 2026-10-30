@@ -51,7 +51,13 @@
         <div class="chat-messages" id="chat-messages"></div>
 
         <form class="chat-input-bar" id="chat-form">
-          <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" required />
+          <input type="file" id="media-input" style="display: none;" />
+          <button type="button" class="attach-btn" id="attach-btn" title="Send image or file">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+          </button>
+          <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" />
           <button type="submit" id="send-btn">Send</button>
         </form>
       </div>
@@ -79,6 +85,8 @@
     const messagesContainer = document.getElementById('chat-messages');
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
+    const mediaInput = document.getElementById('media-input');
+    const attachBtn = document.getElementById('attach-btn');
     const logoutBtn = document.getElementById('logout-btn');
 
     if (currentUser) {
@@ -118,7 +126,7 @@
       });
     }
 
-    function appendMessage(text, isOutgoing, timestamp, messageId, senderName) {
+    function appendMessage(text, isOutgoing, timestamp, messageId, senderName, fileUrl, fileName, fileType) {
       if (messageId && renderedMessageIds.has(messageId)) {
         return;
       }
@@ -131,7 +139,38 @@
 
       const bubbleDiv = document.createElement('div');
       bubbleDiv.className = 'message-bubble';
-      bubbleDiv.textContent = `${isOutgoing ? 'You' : (senderName || 'Partner')} : ${text}`;
+
+      const authorPrefix = isOutgoing ? 'You' : (senderName || 'Partner');
+      const headerSpan = document.createElement('div');
+      headerSpan.style.fontWeight = '600';
+      headerSpan.style.marginBottom = '4px';
+      headerSpan.textContent = authorPrefix;
+      bubbleDiv.appendChild(headerSpan);
+
+      if (text && text.trim()) {
+        const textP = document.createElement('div');
+        textP.textContent = text;
+        bubbleDiv.appendChild(textP);
+      }
+
+      if (fileUrl) {
+        const isImage = (fileType && fileType.startsWith('image/')) || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileUrl);
+        if (isImage) {
+          const img = document.createElement('img');
+          img.src = fileUrl;
+          img.className = 'chat-media-preview';
+          img.alt = fileName || 'Uploaded image';
+          img.addEventListener('click', () => window.open(fileUrl, '_blank'));
+          bubbleDiv.appendChild(img);
+        } else {
+          const fileLink = document.createElement('a');
+          fileLink.href = fileUrl;
+          fileLink.target = '_blank';
+          fileLink.className = 'chat-file-link';
+          fileLink.textContent = `Attachment: ${fileName || 'Download file'}`;
+          bubbleDiv.appendChild(fileLink);
+        }
+      }
 
       const timeDiv = document.createElement('div');
       timeDiv.className = 'message-time';
@@ -350,7 +389,63 @@
     socket.on('new_message', (msg) => {
       const isOutgoing = msg.senderId === currentUser.id;
       const senderName = isOutgoing ? currentUser.name : (msg.senderName || (selectedPartner ? selectedPartner.name : 'Partner'));
-      appendMessage(msg.message, isOutgoing, msg.createdAt, msg.id, senderName);
+      appendMessage(msg.message, isOutgoing, msg.createdAt, msg.id, senderName, msg.fileUrl, msg.fileName, msg.fileType);
+    });
+
+    attachBtn.addEventListener('click', () => {
+      if (!currentRoomId) {
+        alert('Please select a group or user to chat with first!');
+        userSearchInput.focus();
+        return;
+      }
+      mediaInput.click();
+    });
+
+    mediaInput.addEventListener('change', async () => {
+      const file = mediaInput.files[0];
+      if (!file) return;
+
+      if (!currentRoomId) {
+        alert('Please select a group or user to chat with first!');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('media', file);
+      formData.append('roomId', currentRoomId);
+      if (selectedPartner && selectedPartner.id) {
+        formData.append('receiverId', selectedPartner.id);
+      }
+      const optionalText = messageInput.value.trim();
+      if (optionalText) {
+        formData.append('message', optionalText);
+        messageInput.value = '';
+      }
+
+      try {
+        attachBtn.style.opacity = '0.4';
+        attachBtn.disabled = true;
+
+        const res = await fetch('http://localhost:5000/api/v1/messages/upload', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Failed to upload media');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Media upload failed. Please check backend connection.');
+      } finally {
+        attachBtn.style.opacity = '1';
+        attachBtn.disabled = false;
+        mediaInput.value = '';
+      }
     });
 
     chatForm.addEventListener('submit', (e) => {
