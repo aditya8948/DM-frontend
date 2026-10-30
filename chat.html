@@ -21,16 +21,30 @@
   <div class="chat-container">
     <aside class="sidebar">
       <div class="search-box">
-        <input type="text" id="user-search" placeholder="Search email..." autocomplete="off" />
+        <input type="text" id="user-search" placeholder="Search email or #group..." autocomplete="off" />
       </div>
       <div class="sidebar-divider"></div>
-      <div class="users-list" id="users-list"></div>
+      <div class="sidebar-content">
+        <div>
+          <div class="sidebar-section-header">
+            <span class="sidebar-section-title">Groups</span>
+            <button type="button" class="create-group-btn" id="create-group-btn" title="Create or join group">+</button>
+          </div>
+          <div class="groups-list" id="groups-list"></div>
+        </div>
+        <div>
+          <div class="sidebar-section-header">
+            <span class="sidebar-section-title">Direct Messages</span>
+          </div>
+          <div class="users-list" id="users-list"></div>
+        </div>
+      </div>
     </aside>
 
     <main class="chat-panel">
       <div class="chat-card">
         <div class="chat-card-header">
-          <span id="chat-partner-label">Select a user from the list to start chatting</span>
+          <span id="chat-partner-label">Select a group or user to start chatting</span>
           <span id="room-badge" style="font-size: 12px; color: #1e88e5; font-weight: 500;"></span>
         </div>
 
@@ -58,6 +72,8 @@
     const currentUserAvatarEl = document.getElementById('current-user-avatar');
     const userSearchInput = document.getElementById('user-search');
     const usersList = document.getElementById('users-list');
+    const groupsList = document.getElementById('groups-list');
+    const createGroupBtn = document.getElementById('create-group-btn');
     const chatPartnerLabel = document.getElementById('chat-partner-label');
     const roomBadge = document.getElementById('room-badge');
     const messagesContainer = document.getElementById('chat-messages');
@@ -71,7 +87,9 @@
     }
 
     let allUsers = [];
+    let savedGroups = JSON.parse(localStorage.getItem('chat_groups')) || ['#general', '#random'];
     let selectedPartner = null;
+    let selectedGroup = null;
     let currentRoomId = null;
     const renderedMessageIds = new Set();
 
@@ -130,9 +148,35 @@
       }
     }
 
+    function selectGroup(groupName) {
+      const normalized = groupName.startsWith('#') ? groupName : '#' + groupName;
+      if (!savedGroups.includes(normalized)) {
+        savedGroups.push(normalized);
+        localStorage.setItem('chat_groups', JSON.stringify(savedGroups));
+      }
+
+      selectedGroup = normalized;
+      selectedPartner = null;
+      currentRoomId = normalized;
+      userSearchInput.value = normalized;
+
+      socket.emit('join_room', currentRoomId);
+
+      chatPartnerLabel.textContent = `Group: ${normalized}`;
+      roomBadge.textContent = currentRoomId;
+
+      messagesContainer.innerHTML = '';
+      renderedMessageIds.clear();
+
+      renderGroupList(getFilteredGroups());
+      renderUserList(getFilteredUsers());
+
+      messageInput.focus();
+    }
 
     function selectUser(partner) {
       selectedPartner = partner;
+      selectedGroup = null;
       userSearchInput.value = partner.email;
 
       const emails = [currentUser.email.toLowerCase(), partner.email.toLowerCase()].sort();
@@ -146,9 +190,45 @@
       messagesContainer.innerHTML = '';
       renderedMessageIds.clear();
 
+      renderGroupList(getFilteredGroups());
       renderUserList(getFilteredUsers());
 
       messageInput.focus();
+    }
+
+    function renderGroupList(groups) {
+      groupsList.innerHTML = '';
+      if (!groups || groups.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.color = 'rgba(255, 255, 255, 0.75)';
+        empty.style.fontSize = '12px';
+        empty.style.padding = '6px 4px';
+        empty.textContent = 'No matching groups';
+        groupsList.appendChild(empty);
+        return;
+      }
+
+      groups.forEach(group => {
+        const item = document.createElement('div');
+        item.className = 'user-item' + (selectedGroup === group ? ' active' : '');
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'user-item-name';
+        nameSpan.textContent = group;
+
+        const infoSpan = document.createElement('span');
+        infoSpan.className = 'user-item-email';
+        infoSpan.textContent = 'Group Chat';
+
+        item.appendChild(nameSpan);
+        item.appendChild(infoSpan);
+
+        item.addEventListener('click', () => {
+          selectGroup(group);
+        });
+
+        groupsList.appendChild(item);
+      });
     }
 
     function renderUserList(users) {
@@ -156,8 +236,8 @@
       if (!users || users.length === 0) {
         const empty = document.createElement('div');
         empty.style.color = 'rgba(255, 255, 255, 0.75)';
-        empty.style.fontSize = '13px';
-        empty.style.padding = '8px 4px';
+        empty.style.fontSize = '12px';
+        empty.style.padding = '6px 4px';
         empty.textContent = 'No matching users found';
         usersList.appendChild(empty);
         return;
@@ -186,10 +266,22 @@
       });
     }
 
+    function getFilteredGroups() {
+      const q = userSearchInput.value.trim().toLowerCase();
+      if (!q) {
+        return savedGroups;
+      }
+      const cleanQ = q.startsWith('#') ? q.slice(1) : q;
+      return savedGroups.filter(g => g.toLowerCase().includes(cleanQ));
+    }
+
     function getFilteredUsers() {
       const q = userSearchInput.value.trim().toLowerCase();
       if (!q) {
         return allUsers;
+      }
+      if (q.startsWith('#')) {
+        return [];
       }
       return allUsers.filter(u => 
         u.email.toLowerCase().includes(q) || 
@@ -198,6 +290,7 @@
     }
 
     userSearchInput.addEventListener('input', () => {
+      renderGroupList(getFilteredGroups());
       renderUserList(getFilteredUsers());
     });
 
@@ -207,16 +300,30 @@
         const query = userSearchInput.value.trim().toLowerCase();
         if (!query) return;
 
-        const matched = allUsers.find(u => 
+        if (query.startsWith('#')) {
+          selectGroup(query);
+          return;
+        }
+
+        const matchedUser = allUsers.find(u => 
           u.email.toLowerCase() === query || 
           (u.name && u.name.toLowerCase() === query)
         );
 
-        if (matched) {
-          selectUser(matched);
+        if (matchedUser) {
+          selectUser(matchedUser);
         } else {
           selectUser({ id: null, name: query, email: query });
         }
+      }
+    });
+
+    createGroupBtn.addEventListener('click', () => {
+      const name = prompt('Enter group name (e.g. general, dev-team):');
+      if (name && name.trim()) {
+        const cleanName = name.trim().replace(/\s+/g, '-').toLowerCase();
+        const groupTag = cleanName.startsWith('#') ? cleanName : '#' + cleanName;
+        selectGroup(groupTag);
       }
     });
 
@@ -230,6 +337,7 @@
         const data = await res.json();
         if (data && data.users) {
           allUsers = data.users;
+          renderGroupList(getFilteredGroups());
           renderUserList(allUsers);
         }
       } catch (err) {
@@ -251,7 +359,7 @@
       if (!text) return;
 
       if (!currentRoomId) {
-        alert('Please select a user to chat with first!');
+        alert('Please select a group or user to chat with first!');
         userSearchInput.focus();
         return;
       }
