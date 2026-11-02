@@ -155,6 +155,9 @@
 
       if (fileUrl) {
         const isImage = (fileType && fileType.startsWith('image/')) || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileUrl);
+        const isVideo = (fileType && fileType.startsWith('video/')) || /\.(mp4|webm|ogg|mov)$/i.test(fileUrl);
+        const isAudio = (fileType && fileType.startsWith('audio/')) || /\.(mp3|wav|ogg|m4a)$/i.test(fileUrl);
+
         if (isImage) {
           const img = document.createElement('img');
           img.src = fileUrl;
@@ -162,6 +165,19 @@
           img.alt = fileName || 'Uploaded image';
           img.addEventListener('click', () => window.open(fileUrl, '_blank'));
           bubbleDiv.appendChild(img);
+        } else if (isVideo) {
+          const video = document.createElement('video');
+          video.src = fileUrl;
+          video.controls = true;
+          video.className = 'chat-media-preview';
+          bubbleDiv.appendChild(video);
+        } else if (isAudio) {
+          const audio = document.createElement('audio');
+          audio.src = fileUrl;
+          audio.controls = true;
+          audio.style.marginTop = '6px';
+          audio.style.maxWidth = '100%';
+          bubbleDiv.appendChild(audio);
         } else {
           const fileLink = document.createElement('a');
           fileLink.href = fileUrl;
@@ -392,21 +408,12 @@
       appendMessage(msg.message, isOutgoing, msg.createdAt, msg.id, senderName, msg.fileUrl, msg.fileName, msg.fileType);
     });
 
-    attachBtn.addEventListener('click', () => {
-      if (!currentRoomId) {
-        alert('Please select a group or user to chat with first!');
-        userSearchInput.focus();
-        return;
-      }
-      mediaInput.click();
-    });
-
-    mediaInput.addEventListener('change', async () => {
-      const file = mediaInput.files[0];
+    async function uploadAndSendFile(file) {
       if (!file) return;
 
       if (!currentRoomId) {
         alert('Please select a group or user to chat with first!');
+        userSearchInput.focus();
         return;
       }
 
@@ -422,6 +429,17 @@
         messageInput.value = '';
       }
 
+      const indicator = document.createElement('div');
+      indicator.className = 'upload-status-indicator';
+      const spinner = document.createElement('div');
+      spinner.className = 'spinner';
+      const label = document.createElement('span');
+      label.textContent = `Uploading ${file.name}...`;
+      indicator.appendChild(spinner);
+      indicator.appendChild(label);
+      messagesContainer.appendChild(indicator);
+      scrollToBottom(true);
+
       try {
         attachBtn.style.opacity = '0.4';
         attachBtn.disabled = true;
@@ -436,15 +454,57 @@
 
         const data = await res.json();
         if (!res.ok) {
-          alert(data.error || 'Failed to upload media');
+          alert(data.error || 'Failed to upload file');
         }
       } catch (err) {
         console.error(err);
-        alert('Media upload failed. Please check backend connection.');
+        alert('File upload failed. Please check backend connection.');
       } finally {
+        if (indicator && indicator.parentNode) {
+          indicator.parentNode.removeChild(indicator);
+        }
         attachBtn.style.opacity = '1';
         attachBtn.disabled = false;
         mediaInput.value = '';
+      }
+    }
+
+    attachBtn.addEventListener('click', () => {
+      if (!currentRoomId) {
+        alert('Please select a group or user to chat with first!');
+        userSearchInput.focus();
+        return;
+      }
+      mediaInput.click();
+    });
+
+    mediaInput.addEventListener('change', () => {
+      if (mediaInput.files && mediaInput.files[0]) {
+        uploadAndSendFile(mediaInput.files[0]);
+      }
+    });
+
+    const chatCardEl = document.querySelector('.chat-card');
+    ['dragenter', 'dragover'].forEach(eventName => {
+      chatCardEl.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chatCardEl.classList.add('drag-over');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      chatCardEl.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chatCardEl.classList.remove('drag-over');
+      });
+    });
+
+    chatCardEl.addEventListener('drop', (e) => {
+      const files = e.dataTransfer ? e.dataTransfer.files : null;
+      if (files && files.length > 0) {
+        uploadAndSendFile(files[0]);
       }
     });
 
